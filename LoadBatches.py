@@ -1,11 +1,11 @@
-
 import numpy as np
 import cv2
 import glob
 import itertools
+import numpy as np
 
 
-def getImageArr( path , width , height , imgNorm="sub_mean" , ordering='channels_last' ):
+def getImageArr( path , width , height , imgNorm="sub_mean" , ordering='channels_first' ): #apparently it exxpects channel last and the default of open cv is channel last. So I just change the ordering to channels_last to have the default shape
 
 	try:
 		img = cv2.imread(path, 1)
@@ -42,16 +42,21 @@ def getSegmentationArr( path , nClasses ,  width , height  ):
 	try:
 		img = cv2.imread(path, 1)
 		img = cv2.resize(img, ( width , height ))
+		img = np.rollaxis(img, 2, 0) # to get the channels first
+                return img
+                '''
+                print(img.shape)
 		img = img[:, : , 0]
+                print(img.shape)
 
 		for c in range(nClasses):
 			seg_labels[: , : , c ] = (img == c ).astype(int)
-
+                '''
 	except Exception, e:
 		print e
 		
-	return seg_labels
         '''
+	return seg_labels
 	seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
         print("labels end", seg_labels.shape)
 	return seg_labels
@@ -79,8 +84,8 @@ def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classe
         Y_train = []
         for im_ann in zipped:
             im , seg = im_ann[:2]
-            X_train.append( getImageArr(im , input_width , input_height )  )
-            Y_train.append( getSegmentationArr( seg , n_classes , output_width , output_height))
+            X_train.append(np.array( getImageArr(im , input_width , input_height )  ))
+            Y_train.append( np.array(getSegmentationArr( seg , n_classes , output_width , output_height)))
         return X_train, Y_train
 
         ## end Sara
@@ -92,7 +97,6 @@ def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classe
 			im , seg = zipped.next()
 			X.append( getImageArr(im , input_width , input_height )  )
 			Y.append( getSegmentationArr( seg , n_classes , output_width , output_height))
-
 		yield np.array(X) , np.array(Y)
         '''
 
