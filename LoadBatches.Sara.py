@@ -1,16 +1,14 @@
-
-
 import numpy as np
 import cv2
 import glob
 import itertools
+import numpy as np
 
 
-def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_first' ):
+def getImageArr( path , width , height , imgNorm="sub_mean" , ordering='channels_first' ): #apparently it exxpects channel last and the default of open cv is channel last. So I just change the ordering to channels_last to have the default shape
 
 	try:
 		img = cv2.imread(path, 1)
-
 		if imgNorm == "sub_and_divide":
 			img = np.float32(cv2.resize(img, ( width , height ))) / 127.5 - 1
 		elif imgNorm == "sub_mean":
@@ -24,13 +22,13 @@ def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_
 			img = img.astype(np.float32)
 			img = img/255.0
 
-		if odering == 'channels_first':
+		if ordering == 'channels_first':
 			img = np.rollaxis(img, 2, 0)
 		return img
 	except Exception, e:
 		print path , e
 		img = np.zeros((  height , width  , 3 ))
-		if odering == 'channels_first':
+		if ordering == 'channels_first':
 			img = np.rollaxis(img, 2, 0)
 		return img
 
@@ -44,17 +42,25 @@ def getSegmentationArr( path , nClasses ,  width , height  ):
 	try:
 		img = cv2.imread(path, 1)
 		img = cv2.resize(img, ( width , height ))
+		img = np.rollaxis(img, 2, 0) # to get the channels first
+                return img
+                '''
+                print(img.shape)
 		img = img[:, : , 0]
+                print(img.shape)
 
 		for c in range(nClasses):
 			seg_labels[: , : , c ] = (img == c ).astype(int)
-
+                '''
 	except Exception, e:
 		print e
 		
-	seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+        '''
 	return seg_labels
-
+	seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+        print("labels end", seg_labels.shape)
+	return seg_labels
+        '''
 
 
 def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classes , input_height , input_width , output_height , output_width   ):
@@ -72,17 +78,33 @@ def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classe
 		assert(  im.split('/')[-1].split(".")[0] ==  seg.split('/')[-1].split(".")[0] )
 
 	zipped = itertools.cycle( zip(images,segmentations) )
+        ##Sara
+	zipped = zip(images,segmentations)
+        X_train = []
+        Y_train = []
+        for im_ann in zipped:
+            im , seg = im_ann[:2]
+            X_train.append(np.array( getImageArr(im , input_width , input_height )  ))
+            Y_train.append( np.array(getSegmentationArr( seg , n_classes , output_width , output_height)))
+        return X_train, Y_train
 
+        ## end Sara
+        '''
 	while True:
 		X = []
 		Y = []
 		for _ in range( batch_size) :
 			im , seg = zipped.next()
 			X.append( getImageArr(im , input_width , input_height )  )
-			Y.append( getSegmentationArr( seg , n_classes , output_width , output_height )  )
-
-                print(np.array(X).shape)
-                print(np.array(Y).shape)
+			Y.append( getSegmentationArr( seg , n_classes , output_width , output_height))
 		yield np.array(X) , np.array(Y)
+        '''
+
+# import Models , LoadBatches
+# G  = LoadBatches.imageSegmentationGenerator( "data/clothes_seg/prepped/images_prepped_train/" ,  "data/clothes_seg/prepped/annotations_prepped_train/" ,  1,  10 , 800 , 550 , 400 , 272   ) 
+# G2  = LoadBatches.imageSegmentationGenerator( "data/clothes_seg/prepped/images_prepped_test/" ,  "data/clothes_seg/prepped/annotations_prepped_test/" ,  1,  10 , 800 , 550 , 400 , 272   ) 
+
+# m = Models.VGGSegnet.VGGSegnet( 10  , use_vgg_weights=True ,  optimizer='adadelta' , input_image_size=( 800 , 550 )  )
+# m.fit_generator( G , 512  , nb_epoch=10 )
 
 
