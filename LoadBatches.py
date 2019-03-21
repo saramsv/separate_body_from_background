@@ -1,5 +1,3 @@
-
-
 import numpy as np
 import cv2
 import glob
@@ -35,10 +33,7 @@ def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_
 		return img
 
 
-
-
-
-def getSegmentationArr( path , nClasses ,  width , height  ):
+def getSegmentationArr(path , nClasses ,  width , height):
 
 	seg_labels = np.zeros((  height , width  , nClasses ))
 	try:
