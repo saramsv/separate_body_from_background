@@ -33,24 +33,40 @@ def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_
 		return img
 
 
-def getSegmentationArr(path , nClasses ,  width , height):
+def getSegmentationImgs(path , nClasses ,  width , height):
 
 	seg_labels = np.zeros((  height , width  , nClasses ))
 	try:
 		img = cv2.imread(path, 1)
 		img = cv2.resize(img, ( width , height ))
 		img = img[:, : , 0]
+                img = np.reshape(img, (1, width, height))# an image with 3 channel 
 
-		for c in range(nClasses):
-			seg_labels[: , : , c ] = (img == c ).astype(int)
+		##for c in range(nClasses):
+		##	seg_labels[: , : , c ] = (img == c ).astype(int)
 
 	except Exception, e:
 		print e
 		
-	seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
-	return seg_labels
+	##seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+	##return seg_labels
+	return img
 
+def getSegmentationArr(imgs , nClasses ,  width , height):
+        labels = []
+        for img in imgs:
+            seg_labels = np.zeros((  height , width  , nClasses ))
+            try:
 
+                    for c in range(nClasses):
+                            seg_labels[: , : , c ] = (img[0] == c ).astype(int)
+
+            except Exception, e:
+                    print e
+                    
+            seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+            labels.append(seg_labels)
+        return np.array(labels)
 
 def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classes , input_height , input_width , output_height , output_width   ):
 	
@@ -66,18 +82,33 @@ def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classe
 	for im , seg in zip(images,segmentations):
 		assert(  im.split('/')[-1].split(".")[0] ==  seg.split('/')[-1].split(".")[0] )
 
-	zipped = itertools.cycle( zip(images,segmentations) )
+	#zipped = itertools.cycle( zip(images,segmentations) )
 
+        ##Sara
+	zipped = zip(images,segmentations)
+        X_train = []
+        Y_train = []
+        for im_ann in zipped:
+            im , seg = im_ann[:2]
+            X_train.append(getImageArr(im , input_width , input_height))
+            Y_train.append(getSegmentationImgs( seg , n_classes , output_width , output_height))
+        print(np.array(X_train).shape)
+        print(np.array(Y_train).shape)
+        return np.array(X_train), np.array(Y_train)
+
+        ## end Sara
+
+        '''
 	while True:
 		X = []
 		Y = []
 		for _ in range( batch_size) :
 			im , seg = zipped.next()
 			X.append( getImageArr(im , input_width , input_height )  )
-			Y.append( getSegmentationArr( seg , n_classes , output_width , output_height )  )
+			Y.append( getSegmentationImgs( seg , n_classes , output_width , output_height )  )
 
                 print(np.array(X).shape)
                 print(np.array(Y).shape)
 		yield np.array(X) , np.array(Y)
 
-
+        '''

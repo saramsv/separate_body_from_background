@@ -19,7 +19,7 @@ parser.add_argument('--validate',action='store_false')
 parser.add_argument("--val_images", type = str , default = "")
 parser.add_argument("--val_annotations", type = str , default = "")
 
-parser.add_argument("--epochs", type = int, default = 2)
+parser.add_argument("--epochs", type = int, default = 200)
 parser.add_argument("--batch_size", type = int, default = 2 )
 parser.add_argument("--val_batch_size", type = int, default = 2 )
 parser.add_argument("--load_weights", type = str , default = "")
@@ -75,28 +75,72 @@ print "Model output shape" ,  m.output_shape
 
 output_height = m.outputHeight
 output_width = m.outputWidth
+
+'''
 G  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
 
 G_v  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+'''
+x_train, y_train  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
 
+x_val, y_val  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
 
+def image_augmentation(imgs, masks): 
+    #  create two instances with the same arguments
+    # create dictionary with the input augmentation values
+    data_gen_args = dict(featurewise_center=False,
+                         featurewise_std_normalization=False,
+                         rotation_range=90.,
+                         width_shift_range=0.1,
+                         height_shift_range=0.1,
+                         zoom_range=0.2, 
+                         horizontal_flip=True,
+                         vertical_flip = True)
+    ## use this method with both images and masks
+    image_datagen = ImageDataGenerator(**data_gen_args)
+    mask_datagen = ImageDataGenerator(**data_gen_args)
+
+    # Provide the same seed and keyword arguments to the fit and flow methods
+    seed = 1
+    ## fit the augmentation model to the images and masks with the same seed
+    image_datagen.fit(imgs, augment=True, seed=seed)
+    mask_datagen.fit(masks, augment=True, seed=seed)
+    ## set the parameters for the data to come from (images)
+    image_generator = image_datagen.flow(
+        x = imgs,
+        y = None,
+        batch_size=train_batch_size,
+        shuffle=True,
+        seed=seed)
+    ## set the parameters for the data to come from (masks)
+    mask_generator = mask_datagen.flow(
+        masks,
+        batch_size=train_batch_size,
+        shuffle=True,
+        seed=seed)
+
+    while True:
+        yield(image_generator.next(),LoadBatches.getSegmentationArr(mask_generator.next(), n_classes, output_height, output_width))
+
+train_generator = image_augmentation(x_train, y_train)
+val_generator = image_augmentation(x_val, y_val)
 
 if validate:
 	G2  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
 
 if not validate:
     m.fit_generator(
-		    G,
+		    train_generator,
 		    steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
 		    epochs=epochs,
-		    validation_data=G_v,
+		    validation_data=val_generator,
 		    callbacks = callbacks,
 		    validation_steps= (sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)
 else:
     m.fit_generator(
-		    G,
+		    train_generator,
 		    steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
 		    epochs=epochs,
-		    validation_data=G_v,
+		    validation_data=val_generator,
 		    callbacks = callbacks,
 		    validation_steps= (sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)
