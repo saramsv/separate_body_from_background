@@ -4,7 +4,7 @@ import glob
 import itertools
 
 
-def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_first' ):
+def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_last' ):
 
 	try:
 		img = cv2.imread(path, 1)
@@ -40,7 +40,8 @@ def getSegmentationImgs(path , nClasses ,  width , height):
 		img = cv2.imread(path, 1)
 		img = cv2.resize(img, ( width , height ))
 		img = img[:, : , 0]
-                img = np.reshape(img, (1, width, height))# an image with 3 channel 
+                img = np.reshape(img, (width, height,1))# an image with 3 channel, channel_last 
+                #img = np.reshape(img, (1, width, height))# an image with 3 channel 
 
 		##for c in range(nClasses):
 		##	seg_labels[: , : , c ] = (img == c ).astype(int)
@@ -57,16 +58,25 @@ def getSegmentationArr(imgs , nClasses ,  width , height):
         for img in imgs:
             seg_labels = np.zeros((  height , width  , nClasses ))
             try:
-
                     for c in range(nClasses):
-                            seg_labels[: , : , c ] = (img[0] == c ).astype(int)
+                        seg_labels[: , : , c ] = (img[:, :, 0] == 1 ).astype(int)#because everything other than bg is set as 1.
 
             except Exception, e:
                     print e
                     
-            seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
-            labels.append(seg_labels)
+            ##seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+            ##labels.append(seg_labels)
+            labels.append(seg_labels[:,:,0])
         return np.array(labels)
+
+
+
+def show_img(imgs, name):
+        i = 0
+        for img in imgs:
+            #img2 = np.rollaxis(img, 2, 0)
+            #img2 = np.rollaxis(img2, 2, 0)
+            cv2.imwrite(name+str(i)+".jpg", img)
 
 def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classes , input_height , input_width , output_height , output_width   ):
 	
@@ -92,8 +102,8 @@ def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classe
             im , seg = im_ann[:2]
             X_train.append(getImageArr(im , input_width , input_height))
             Y_train.append(getSegmentationImgs( seg , n_classes , output_width , output_height))
-        print(np.array(X_train).shape)
-        print(np.array(Y_train).shape)
+        #print(np.array(X_train).shape)
+        #print(np.array(Y_train).shape)
         return np.array(X_train), np.array(Y_train)
 
         ## end Sara

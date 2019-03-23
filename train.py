@@ -20,8 +20,8 @@ parser.add_argument("--val_images", type = str , default = "")
 parser.add_argument("--val_annotations", type = str , default = "")
 
 parser.add_argument("--epochs", type = int, default = 200)
-parser.add_argument("--batch_size", type = int, default = 2 )
-parser.add_argument("--val_batch_size", type = int, default = 2 )
+parser.add_argument("--batch_size", type = int, default = 10 )
+parser.add_argument("--val_batch_size", type = int, default = 5 )
 parser.add_argument("--load_weights", type = str , default = "")
 
 parser.add_argument("--model_name", type = str , default = "")
@@ -73,8 +73,11 @@ if len( load_weights ) > 0:
 
 print "Model output shape" ,  m.output_shape
 
-output_height = m.outputHeight
-output_width = m.outputWidth
+#output_height = m.outputHeight
+#output_width = m.outputWidth
+
+output_height = m.output_shape[1]
+output_width = m.output_shape[2]
 
 '''
 G  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
@@ -93,7 +96,7 @@ def image_augmentation(imgs, masks):
                          rotation_range=90.,
                          width_shift_range=0.1,
                          height_shift_range=0.1,
-                         zoom_range=0.2, 
+                         zoom_range=0.3, 
                          horizontal_flip=True,
                          vertical_flip = True)
     ## use this method with both images and masks
@@ -118,7 +121,9 @@ def image_augmentation(imgs, masks):
         batch_size=train_batch_size,
         shuffle=True,
         seed=seed)
-
+    #LoadBatches.show_img(image_generator.next(), "img")
+    #LoadBatches.show_img(mask_generator.next(), "mask")
+    #exit()
     while True:
         yield(image_generator.next(),LoadBatches.getSegmentationArr(mask_generator.next(), n_classes, output_height, output_width))
 
@@ -139,8 +144,8 @@ if not validate:
 else:
     m.fit_generator(
 		    train_generator,
-		    steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
+		    steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])),
 		    epochs=epochs,
 		    validation_data=val_generator,
 		    callbacks = callbacks,
-		    validation_steps= (sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)
+		    validation_steps= (sum([len(files) for r, d, files in os.walk(val_images_path)])))
