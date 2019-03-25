@@ -4,10 +4,11 @@ import glob
 import itertools
 
 
-def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_last' ):
+def getImageArr( path , width , height , imgNorm="No_sub_mean" , odering='channels_last' ):
 
 	try:
 		img = cv2.imread(path, 1)
+		img = cv2.resize(img, ( width , height ))
 
 		if imgNorm == "sub_and_divide":
 			img = np.float32(cv2.resize(img, ( width , height ))) / 127.5 - 1
@@ -40,22 +41,24 @@ def getSegmentationImgs(path , nClasses ,  width , height):
 		img = cv2.imread(path, 1)
 		img = cv2.resize(img, ( width , height ))
 		img = img[:, : , 0]
-                img = np.reshape(img, (width, height,1))# an image with 3 channel, channel_last 
+                #img = np.reshape(img, (width, height,1))# an image with 3 channel, channel_last 
                 #img = np.reshape(img, (1, width, height))# an image with 3 channel 
 
-		##for c in range(nClasses):
-		##	seg_labels[: , : , c ] = (img == c ).astype(int)
+		for c in range(nClasses):
+			seg_labels[: , : , c ] = (img == c ).astype(int)
 
 	except Exception, e:
 		print e
 		
 	##seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
-	##return seg_labels
-	return img
+        #print("seg size:", seg_labels.shape)
+	return seg_labels
+	#return img
 
 def getSegmentationArr(imgs , nClasses ,  width , height):
         labels = []
         for img in imgs:
+            '''
             seg_labels = np.zeros((  height , width  , nClasses ))
             try:
                     for c in range(nClasses):
@@ -67,16 +70,23 @@ def getSegmentationArr(imgs , nClasses ,  width , height):
             ##seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
             ##labels.append(seg_labels)
             labels.append(seg_labels[:,:,0])
+            '''
+            labels.append(np.reshape(img, ( width*height , nClasses )))
         return np.array(labels)
 
 
 
-def show_img(imgs, name):
-        i = 0
+def show_img(imgs, name, i):
         for img in imgs:
             #img2 = np.rollaxis(img, 2, 0)
             #img2 = np.rollaxis(img2, 2, 0)
-            cv2.imwrite(name+str(i)+".jpg", img)
+            if name == "img":
+                #print("img size:", img.shape)
+                cv2.imwrite("test/" + name + str(i) + ".jpg", img)
+            if name == "mask":
+                #img = np.reshape(img, (img.shape[0], img.shape[1], 1))
+                #print("mask size: ",img[:,:,0].shape)
+                cv2.imwrite("test/" + name + str(i) + ".png",img[:,:,0] )
 
 def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classes , input_height , input_width , output_height , output_width   ):
 	

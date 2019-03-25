@@ -20,8 +20,8 @@ parser.add_argument("--val_images", type = str , default = "")
 parser.add_argument("--val_annotations", type = str , default = "")
 
 parser.add_argument("--epochs", type = int, default = 200)
-parser.add_argument("--batch_size", type = int, default = 10 )
-parser.add_argument("--val_batch_size", type = int, default = 5 )
+parser.add_argument("--batch_size", type = int, default = 80 )
+parser.add_argument("--val_batch_size", type = int, default = 35 )
 parser.add_argument("--load_weights", type = str , default = "")
 
 parser.add_argument("--model_name", type = str , default = "")
@@ -57,27 +57,25 @@ m = modelFN( n_classes , input_height=input_height, input_width=input_width   )
 callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + "{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
 
 loss_ = 'categorical_crossentrop'
-if n_classes == 1:
+if n_classes == 2:
         loss_ = 'binary_crossentropy'
 
-        optimizer_name = optimizers.SGD(lr = 0.001, clipvalue = 0.5, decay = 1e-6, momentum = 0.9, nesterov = True)
-        m.compile(loss= loss_,
-                      optimizer= optimizer_name ,
-                            metrics=['accuracy'])
-
-
+optimizer_name = optimizers.SGD(lr = 0.01, clipvalue = 0.5, decay = 1e-6, momentum = 0.9, nesterov = True)
+m.compile(loss= loss_,
+        optimizer= optimizer_name ,
+        metrics=['accuracy'])
 
 if len( load_weights ) > 0:
 	m.load_weights(load_weights)
 
-
 print "Model output shape" ,  m.output_shape
 
-#output_height = m.outputHeight
-#output_width = m.outputWidth
 
-output_height = m.output_shape[1]
-output_width = m.output_shape[2]
+output_height = m.outputHeight
+output_width = m.outputWidth
+
+#output_height = m.output_shape[1]
+#output_width = m.output_shape[2]
 
 '''
 G  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
@@ -99,6 +97,7 @@ def image_augmentation(imgs, masks):
                          zoom_range=0.3, 
                          horizontal_flip=True,
                          vertical_flip = True)
+    #data_gen_args = dict()
     ## use this method with both images and masks
     image_datagen = ImageDataGenerator(**data_gen_args)
     mask_datagen = ImageDataGenerator(**data_gen_args)
@@ -112,20 +111,27 @@ def image_augmentation(imgs, masks):
     image_generator = image_datagen.flow(
         x = imgs,
         y = None,
-        batch_size=train_batch_size,
-        shuffle=True,
+        batch_size=1,
+        shuffle=False,
         seed=seed)
     ## set the parameters for the data to come from (masks)
     mask_generator = mask_datagen.flow(
         masks,
-        batch_size=train_batch_size,
-        shuffle=True,
+        batch_size=1,
+        shuffle=False,
         seed=seed)
     #LoadBatches.show_img(image_generator.next(), "img")
     #LoadBatches.show_img(mask_generator.next(), "mask")
     #exit()
+    i = 0
     while True:
-        yield(image_generator.next(),LoadBatches.getSegmentationArr(mask_generator.next(), n_classes, output_height, output_width))
+        #print(i)
+        img_gen = image_generator.next()
+        mask_gen = mask_generator.next()
+        #LoadBatches.show_img(img_gen, "img", i )
+        #LoadBatches.show_img(mask_gen, "mask", i)
+        #i = i+ 1
+        yield(img_gen,LoadBatches.getSegmentationArr(mask_gen, n_classes, output_height, output_width))
 
 train_generator = image_augmentation(x_train, y_train)
 val_generator = image_augmentation(x_val, y_val)
@@ -144,8 +150,8 @@ if not validate:
 else:
     m.fit_generator(
 		    train_generator,
-		    steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])),
+		    steps_per_epoch=1000,#(sum([len(files) for r, d, files in os.walk(train_images_path)])) train_batch_size,
 		    epochs=epochs,
 		    validation_data=val_generator,
 		    callbacks = callbacks,
-		    validation_steps= (sum([len(files) for r, d, files in os.walk(val_images_path)])))
+		    validation_steps= 500)#(sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)

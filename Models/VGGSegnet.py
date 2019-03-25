@@ -81,8 +81,11 @@ def VGGSegnet( n_classes ,  input_height=416, input_width=608 , vgg_level=3):
 
 	o =  Conv2D( n_classes , (3, 3) , padding='same', data_format='channels_last' )( o )
 	o_shape = Model(img_input , o ).output_shape
-	outputHeight = o_shape[2]
-	outputWidth = o_shape[3]
+        #import bpython
+        #bpython.embed(locals())
+        #Sara changed these to 1, 2 instead of 2, 3 (because of channel last. Since now index 1, 2 are width and height and the last index = 3 = channel )
+	outputHeight = o_shape[1]
+	outputWidth = o_shape[2]
 
 	o = (Reshape((  -1  , outputHeight*outputWidth   )))(o)
 	o = (Permute((2, 1)))(o)
