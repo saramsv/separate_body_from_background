@@ -1,15 +1,9 @@
 import argparse
 import keras
-from keras.callbacks import TensorBoard
-import sys
 import os
-sys.path.insert(0, os.path.abspath('.'))
-import Models, LoadBatches
+import Models , LoadBatches
 from keras import optimizers
 from keras.preprocessing.image import ImageDataGenerator
-from keras.preprocessing.image import load_img, img_to_array, list_pictures
-import numpy as np
-
 
 
 
@@ -25,7 +19,7 @@ parser.add_argument('--validate',action='store_false')
 parser.add_argument("--val_images", type = str , default = "")
 parser.add_argument("--val_annotations", type = str , default = "")
 
-parser.add_argument("--epochs", type = int, default =10101010101010101010  )
+parser.add_argument("--epochs", type = int, default = 500)
 parser.add_argument("--batch_size", type = int, default = 80 )
 parser.add_argument("--val_batch_size", type = int, default = 35 )
 parser.add_argument("--load_weights", type = str , default = "")
@@ -49,11 +43,6 @@ load_weights = args.load_weights
 
 optimizer_name = args.optimizer_name
 model_name = args.model_name
-## Start Sara
-val_images_path = args.val_images
-val_segs_path = args.val_annotations
-val_batch_size = args.val_batch_size
-## End Sara
 
 if validate:
 	val_images_path = args.val_images
@@ -63,50 +52,61 @@ if validate:
 modelFns = { 'vgg_segnet':Models.VGGSegnet.VGGSegnet , 'vgg_unet':Models.VGGUnet.VGGUnet , 'vgg_unet2':Models.VGGUnet.VGGUnet2 , 'fcn8':Models.FCN8.FCN8 , 'fcn32':Models.FCN32.FCN32   }
 modelFN = modelFns[ model_name ]
 
-m = modelFN( n_classes , input_height=input_height, input_width=input_width)
-loss_ = 'categorical_crossentrop'
-if n_classes == 1:
-    loss_ = 'binary_crossentropy'
 
-callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + "{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
+m = modelFN( n_classes , input_height=input_height, input_width=input_width   )
+callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + "noAug-{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
+
+loss_ = 'categorical_crossentrop'
+if n_classes == 2:
+        loss_ = 'binary_crossentropy'
 
 optimizer_name = optimizers.SGD(lr = 0.001, clipvalue = 0.5, decay = 1e-6, momentum = 0.9, nesterov = True)
 m.compile(loss= loss_,
-      optimizer= optimizer_name ,
-      metrics=['accuracy'])
-
-callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + "{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
+        optimizer= optimizer_name ,
+        metrics=['accuracy'])
 
 if len( load_weights ) > 0:
 	m.load_weights(load_weights)
 
+print "Model output shape" ,  m.output_shape
+
+
 output_height = m.outputHeight
 output_width = m.outputWidth
 
+#output_height = m.output_shape[1]
+#output_width = m.output_shape[2]
+
+'''
+G  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+
+G_v  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+'''
 x_train, y_train  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+
 x_val, y_val  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
 
-x_train = np.array(x_train)
-y_train = np.array(y_train)
-x_val = np.array(x_val)
-y_val = np.array(y_val)
-print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
-
-'''
-import bpython
-bpython.embed(locals())
-'''
-def image_augmentation(imgs, masks): 
+def image_augmentation(imgs, masks, text): 
     #  create two instances with the same arguments
     # create dictionary with the input augmentation values
+    '''
     data_gen_args = dict(featurewise_center=False,
                          featurewise_std_normalization=False,
                          rotation_range=90.,
                          width_shift_range=0.1,
                          height_shift_range=0.1,
-                         zoom_range=0.2, 
+                         zoom_range=0.3, 
                          horizontal_flip=True,
                          vertical_flip = True)
+    '''
+    data_gen_args = dict()
+
+    if text == "train":
+        batch_size = train_batch_size
+
+    if text == "val":
+        batch_size = val_batch_size
+
     ## use this method with both images and masks
     image_datagen = ImageDataGenerator(**data_gen_args)
     mask_datagen = ImageDataGenerator(**data_gen_args)
@@ -120,27 +120,47 @@ def image_augmentation(imgs, masks):
     image_generator = image_datagen.flow(
         x = imgs,
         y = None,
-        batch_size=train_batch_size,
-        shuffle=True,
+        batch_size=batch_size,
+        shuffle=False,
         seed=seed)
     ## set the parameters for the data to come from (masks)
     mask_generator = mask_datagen.flow(
         masks,
-        batch_size=train_batch_size,
-        shuffle=True,
+        batch_size=batch_size,
+        shuffle=False,
         seed=seed)
+    #LoadBatches.show_img(image_generator.next(), "img")
+    #LoadBatches.show_img(mask_generator.next(), "mask")
+    #exit()
+    i = 0
     while True:
-        yield(image_generator.next(), mask_generator.next())
+        #print(i)
+        img_gen = image_generator.next()
+        mask_gen = mask_generator.next()
+        #LoadBatches.show_img(img_gen, "img", i )
+        #LoadBatches.show_img(mask_gen, "mask", i)
+        #i = i+ 1
+        yield(img_gen,LoadBatches.getSegmentationArr(mask_gen, n_classes, output_height, output_width))
 
-    # combine generators into one which yields image and masks
-    ##train_generator = zip(image_generator, mask_generator)
-    ## return the train generator for input in the CNN 
-    #return train_generator
+train_generator = image_augmentation(x_train, y_train, "train")
+val_generator = image_augmentation(x_val, y_val, "val")
 
-train_generator = image_augmentation(x_train, y_train)
-        ## run the fit generator CNN
-m.fit_generator(
-		train_generator,
-		steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
-		epochs=epochs,
-		callbacks = callbacks)
+if validate:
+	G2  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+
+if not validate:
+    m.fit_generator(
+		    train_generator,
+		    steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
+		    epochs=epochs,
+		    validation_data=val_generator,
+		    callbacks = callbacks,
+		    validation_steps= (sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)
+else:
+    m.fit_generator(
+		    train_generator,
+		    steps_per_epoch= (sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
+		    epochs=epochs,
+		    validation_data=val_generator,
+		    callbacks = callbacks,
+		    validation_steps=(sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)

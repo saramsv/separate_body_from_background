@@ -5,6 +5,7 @@ import glob
 import cv2
 import numpy as np
 import random
+from keras import optimizers
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--save_weights_path", type = str  )
@@ -26,16 +27,23 @@ input_height = args.input_height
 epoch_number = args.epoch_number
 
 modelFns = { 'vgg_segnet':Models.VGGSegnet.VGGSegnet , 'vgg_unet':Models.VGGUnet.VGGUnet , 'vgg_unet2':Models.VGGUnet.VGGUnet2 , 'fcn8':Models.FCN8.FCN8 , 'fcn32':Models.FCN32.FCN32   }
+
 modelFN = modelFns[ model_name ]
 
 m = modelFN( n_classes , input_height=input_height, input_width=input_width   )
 #m.load_weights(  args.save_weights_path + "." + str(  epoch_number )  )
 ##Sara
-m.load_weights(  args.save_weights_path)
-m.compile(loss='categorical_crossentropy',
-      optimizer= 'adadelta' ,
+loss_ = 'categorical_crossentropy'
+if n_classes == 2:
+    loss_ = 'binary_crossentropy'
+
+optimizer_name = optimizers.SGD(lr = 0.001, clipvalue = 0.5, decay = 1e-6, momentum = 0.9, nesterov = True)
+
+m.compile(loss=loss_,
+      optimizer= optimizer_name ,
       metrics=['accuracy'])
 
+m.load_weights(  args.save_weights_path)
 
 output_height = m.outputHeight
 output_width = m.outputWidth
@@ -49,7 +57,7 @@ for imgName in images:
 	outName = imgName.replace( images_path ,  args.output_path )
 	X = LoadBatches.getImageArr(imgName , args.input_width  , args.input_height  )
 	pr = m.predict( np.array([X]) )[0]
-	pr = pr.reshape(( output_height ,  output_width , n_classes ) ).argmax( axis=2 )
+	pr = pr.reshape(( output_height ,  output_width, n_classes )).argmax( axis=2 )
 	seg_img = np.zeros( ( output_height , output_width , 3  ) )
 	for c in range(n_classes):
 		seg_img[:,:,0] += ( (pr[:,: ] == c )*( colors[c][0] )).astype('uint8')
