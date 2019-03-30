@@ -17,7 +17,7 @@ parser.add_argument('--validate',action='store_false')
 parser.add_argument("--val_images", type = str , default = "")
 parser.add_argument("--val_annotations", type = str , default = "")
 
-parser.add_argument("--epochs", type = int, default = 100)
+parser.add_argument("--epochs", type = int, default = 50)
 parser.add_argument("--batch_size", type = int, default = 2 )
 parser.add_argument("--val_batch_size", type = int, default = 2 )
 parser.add_argument("--load_weights", type = str , default = "")
@@ -55,7 +55,7 @@ m.compile(loss='categorical_crossentropy',
       optimizer= optimizer_name ,
       metrics=['accuracy'])
 
-callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + "th-Aug-{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
+callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + model_name + "-th-Aug-{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
 
 if len( load_weights ) > 0:
 	m.load_weights(load_weights)

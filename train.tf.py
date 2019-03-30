@@ -1,166 +1,174 @@
-import argparse
-import keras
-import os
-import Models , LoadBatches
-from keras import optimizers
+import cv2
+import glob
+import itertools
 from keras.preprocessing.image import ImageDataGenerator
 
 
+def getImageArr( path , width , height , imgNorm="No_sub_mean" , odering='channels_last' ):
+def getImageArr( path , width , height , imgNorm="sub_mean" , odering='channels_first' ):
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--save_weights_path", type = str  )
-parser.add_argument("--train_images", type = str  )
-parser.add_argument("--train_annotations", type = str  )
-parser.add_argument("--n_classes", type=int )
-parser.add_argument("--input_height", type=int , default = 224  )
-parser.add_argument("--input_width", type=int , default = 224 )
+	try:
+		img = cv2.imread(path, 1)
+		img = cv2.resize(img, ( width , height ))
 
-parser.add_argument('--validate',action='store_false')
-parser.add_argument("--val_images", type = str , default = "")
-parser.add_argument("--val_annotations", type = str , default = "")
-
-parser.add_argument("--epochs", type = int, default = 500)
-parser.add_argument("--batch_size", type = int, default = 80 )
-parser.add_argument("--val_batch_size", type = int, default = 35 )
-parser.add_argument("--load_weights", type = str , default = "")
-
-parser.add_argument("--model_name", type = str , default = "")
-parser.add_argument("--optimizer_name", type = str , default = "adadelta")
-
-
-args = parser.parse_args()
-
-train_images_path = args.train_images
-train_segs_path = args.train_annotations
-train_batch_size = args.batch_size
-n_classes = args.n_classes
-input_height = args.input_height
-input_width = args.input_width
-validate = args.validate
-save_weights_path = args.save_weights_path
-epochs = args.epochs
-load_weights = args.load_weights
-
-optimizer_name = args.optimizer_name
-model_name = args.model_name
-
-if validate:
-	val_images_path = args.val_images
-	val_segs_path = args.val_annotations
-	val_batch_size = args.val_batch_size
-
-modelFns = { 'vgg_segnet':Models.VGGSegnet.VGGSegnet , 'vgg_unet':Models.VGGUnet.VGGUnet , 'vgg_unet2':Models.VGGUnet.VGGUnet2 , 'fcn8':Models.FCN8.FCN8 , 'fcn32':Models.FCN32.FCN32   }
-modelFN = modelFns[ model_name ]
+		if imgNorm == "sub_and_divide":
+			img = np.float32(cv2.resize(img, ( width , height ))) / 127.5 - 1
+		elif imgNorm == "sub_mean":
+			img = cv2.resize(img, ( width , height ))
+			img = img.astype(np.float32)
+			img[:,:,0] -= 103.939
+			img[:,:,1] -= 116.779
+			img[:,:,2] -= 123.68
+		elif imgNorm == "divide":
+			img = cv2.resize(img, ( width , height ))
+			img = img.astype(np.float32)
+			img = img/255.0
+		if odering == 'channels_first':
+			img = np.rollaxis(img, 2, 0)
+		return img
+	except Exception, e:
+		print path , e
+		img = np.zeros((  height , width  , 3 ))
+		if odering == 'channels_first':
+			img = np.rollaxis(img, 2, 0)
+		return img
 
 
-m = modelFN( n_classes , input_height=input_height, input_width=input_width   )
-callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + "noAug-{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
-
-loss_ = 'categorical_crossentrop'
-if n_classes == 2:
-        loss_ = 'binary_crossentropy'
-
-optimizer_name = optimizers.SGD(lr = 0.001, clipvalue = 0.5, decay = 1e-6, momentum = 0.9, nesterov = True)
-m.compile(loss= loss_,
-        optimizer= optimizer_name ,
-        metrics=['accuracy'])
-
-if len( load_weights ) > 0:
-	m.load_weights(load_weights)
-
-print "Model output shape" ,  m.output_shape
+def getSegmentationImgs(path , nClasses ,  width , height):
 
 
-output_height = m.outputHeight
-output_width = m.outputWidth
 
-#output_height = m.output_shape[1]
-#output_width = m.output_shape[2]
+def getSegmentationArr( path , nClasses ,  width , height  ):
 
-'''
-G  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+	seg_labels = np.zeros((  height , width  , nClasses ))
+	try:
+		img = cv2.imread(path, 1)
+		img = cv2.resize(img, ( width , height ))
+                img[np.where(img[:,:,0] != 0)] = 1 ## This is becuase in my augmentation the 1 have been converted to 255 and some other numbers!
+		img = img[:, : , 0]
+                #img = np.reshape(img, (width, height,1))# an image with 3 channel, channel_last 
+                #img = np.reshape(img, (1, width, height))# an image with 3 channel 
 
-G_v  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
-'''
-x_train, y_train  = LoadBatches.imageSegmentationGenerator( train_images_path , train_segs_path ,  train_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+		for c in range(nClasses):
+			seg_labels[: , : , c ] = (img == c ).astype(int)
 
-x_val, y_val  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
+	except Exception, e:
+		print e
 
-def image_augmentation(imgs, masks, text): 
-    #  create two instances with the same arguments
-    # create dictionary with the input augmentation values
-    '''
-    data_gen_args = dict(featurewise_center=False,
-                         featurewise_std_normalization=False,
-                         rotation_range=90.,
-                         width_shift_range=0.1,
-                         height_shift_range=0.1,
-                         zoom_range=0.3, 
-                         horizontal_flip=True,
-                         vertical_flip = True)
-    '''
-    data_gen_args = dict()
+	##seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+        #print("seg size:", seg_labels.shape)
+	seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+	return seg_labels
+	#return img
 
-    if text == "train":
-        batch_size = train_batch_size
+def getSegmentationArr(imgs , nClasses ,  width , height):
+        labels = []
+        for img in imgs:
+            '''
+            seg_labels = np.zeros((  height , width  , nClasses ))
+            try:
+                    for c in range(nClasses):
+                        seg_labels[: , : , c ] = (img[:, :, 0] == 1 ).astype(int)#because everything other than bg is set as 1.
+            except Exception, e:
+                    print e
+                    
+            ##seg_labels = np.reshape(seg_labels, ( width*height , nClasses ))
+            ##labels.append(seg_labels)
+            labels.append(seg_labels[:,:,0])
+            '''
+            labels.append(np.reshape(img, ( width*height , nClasses )))
+        return np.array(labels)
 
-    if text == "val":
-        batch_size = val_batch_size
 
-    ## use this method with both images and masks
-    image_datagen = ImageDataGenerator(**data_gen_args)
-    mask_datagen = ImageDataGenerator(**data_gen_args)
 
-    # Provide the same seed and keyword arguments to the fit and flow methods
-    seed = 1
-    ## fit the augmentation model to the images and masks with the same seed
-    image_datagen.fit(imgs, augment=True, seed=seed)
-    mask_datagen.fit(masks, augment=True, seed=seed)
-    ## set the parameters for the data to come from (images)
-    image_generator = image_datagen.flow(
-        x = imgs,
-        y = None,
-        batch_size=batch_size,
-        shuffle=False,
-        seed=seed)
-    ## set the parameters for the data to come from (masks)
-    mask_generator = mask_datagen.flow(
-        masks,
-        batch_size=batch_size,
-        shuffle=False,
-        seed=seed)
-    #LoadBatches.show_img(image_generator.next(), "img")
-    #LoadBatches.show_img(mask_generator.next(), "mask")
-    #exit()
-    i = 0
-    while True:
-        #print(i)
-        img_gen = image_generator.next()
-        mask_gen = mask_generator.next()
-        #LoadBatches.show_img(img_gen, "img", i )
-        #LoadBatches.show_img(mask_gen, "mask", i)
-        #i = i+ 1
-        yield(img_gen,LoadBatches.getSegmentationArr(mask_gen, n_classes, output_height, output_width))
+def show_img(imgs, name, i):
+        for img in imgs:
+            #img2 = np.rollaxis(img, 2, 0)
+            #img2 = np.rollaxis(img2, 2, 0)
+            if name == "img":
+                #print("img size:", img.shape)
+                cv2.imwrite("test/" + name + str(i) + ".jpg", img)
+            if name == "mask":
+                #img = np.reshape(img, (img.shape[0], img.shape[1], 1))
+                #print("mask size: ",img[:,:,0].shape)
+                cv2.imwrite("test/" + name + str(i) + ".png",img[:,:,0] )
 
-train_generator = image_augmentation(x_train, y_train, "train")
-val_generator = image_augmentation(x_val, y_val, "val")
 
-if validate:
-	G2  = LoadBatches.imageSegmentationGenerator( val_images_path , val_segs_path ,  val_batch_size,  n_classes , input_height , input_width , output_height , output_width   )
 
-if not validate:
-    m.fit_generator(
-		    train_generator,
-		    steps_per_epoch=(sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
-		    epochs=epochs,
-		    validation_data=val_generator,
-		    callbacks = callbacks,
-		    validation_steps= (sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)
-else:
-    m.fit_generator(
-		    train_generator,
-		    steps_per_epoch= (sum([len(files) for r, d, files in os.walk(train_images_path)])) // train_batch_size,
-		    epochs=epochs,
-		    validation_data=val_generator,
-		    callbacks = callbacks,
-		    validation_steps=(sum([len(files) for r, d, files in os.walk(val_images_path)])) // val_batch_size)
+def imageSegmentationGenerator( images_path , segs_path ,  batch_size,  n_classes , input_height , input_width , output_height , output_width   ):
+
+	assert images_path[-1] == '/'
+	assert segs_path[-1] == '/'
+
+	datagen = ImageDataGenerator(
+		rotation_range=40,
+		width_shift_range=0.2,
+		height_shift_range=0.2,
+		shear_range=0.2,
+		zoom_range=0.2,
+		horizontal_flip=True,
+		fill_mode='nearest')
+
+	images = glob.glob( images_path + "*.JPG"  ) + glob.glob( images_path + "*.jpg"  ) + glob.glob( images_path + "*.png"  ) +  glob.glob( images_path + "*.jpeg"  )
+	images.sort()
+	segmentations  = glob.glob( segs_path + "*.jpg"  ) + glob.glob( segs_path + "*.png"  ) +  glob.glob( segs_path + "*.jpeg"  )
+	segmentations.sort()
+	assert len( images ) == len(segmentations)
+	for im , seg in zip(images,segmentations):
+		assert(  im.split('/')[-1].split(".")[0] ==  seg.split('/')[-1].split(".")[0] )
+
+	#zipped = itertools.cycle( zip(images,segmentations) )
+	zipped = itertools.cycle( zip(images,segmentations) )
+
+        ##Sara
+	zipped = zip(images,segmentations)
+        X_train = []
+        Y_train = []
+        for im_ann in zipped:
+            im , seg = im_ann[:2]
+            X_train.append(getImageArr(im , input_width , input_height))
+            Y_train.append(getSegmentationImgs( seg , n_classes , output_width , output_height))
+        #print(np.array(X_train).shape)
+        #print(np.array(Y_train).shape)
+        return np.array(X_train), np.array(Y_train)
+
+        ## end Sara
+
+        '''
+	while True:
+		X = []
+		Y = []
+		for _ in range( batch_size) :
+			im , seg = zipped.next()
+			X.append( getImageArr(im , input_width , input_height )  )
+			Y.append( getSegmentationImgs( seg , n_classes , output_width , output_height )  )
+                print(np.array(X).shape)
+                print(np.array(Y).shape)
+			Y.append( getSegmentationArr( seg , n_classes , output_width , output_height )  )
+                '''    
+		x = np.array(X)
+		y = np.array(Y)
+		i = 0
+		for x_batch in datagen.flow(x, batch_size = batch_size, save_to_dir='test/', save_prefix='aug', save_format='jpeg', seed = 1):
+                    y_batch = datagen.flow(y, batch_size = batch_size, save_to_dir='test/', save_prefix='aug', save_format='jpeg', seed = 1)
+                    print(x_batch.shape)
+                    #import bpython
+                    #bpython.embed(locals())
+		    yield x_batch , y_batch
+                    #exit()
+		    i += 1
+		    if i > 0:
+			break  # otherwise the generator would loop indefinitely
+                '''
+		yield np.array(X) , np.array(Y)
+
+        '''
+
+# import Models , LoadBatches
+# G  = LoadBatches.imageSegmentationGenerator( "data/clothes_seg/prepped/images_prepped_train/" ,  "data/clothes_seg/prepped/annotations_prepped_train/" ,  1,  10 , 800 , 550 , 400 , 272   ) 
+# G2  = LoadBatches.imageSegmentationGenerator( "data/clothes_seg/prepped/images_prepped_test/" ,  "data/clothes_seg/prepped/annotations_prepped_test/" ,  1,  10 , 800 , 550 , 400 , 272   ) 
+
+# m = Models.VGGSegnet.VGGSegnet( 10  , use_vgg_weights=True ,  optimizer='adadelta' , input_image_size=( 800 , 550 )  )
+# m.fit_generator( G , 512  , nb_epoch=10 )
+
+
