@@ -93,6 +93,11 @@ def VGGSegnet( n_classes ,  input_height=416, input_width=608 , vgg_level=3):
 	model.outputWidth = outputWidth
 	model.outputHeight = outputHeight
 
+        ## Set the frist 25 layers as non-trainable
+        '''
+        for layer in model.layers[:25]:
+                layer.trainable = False
+        '''
 	return model
 
 

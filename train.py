@@ -18,8 +18,8 @@ parser.add_argument("--val_images", type = str , default = "")
 parser.add_argument("--val_annotations", type = str , default = "")
 
 parser.add_argument("--epochs", type = int, default = 50)
-parser.add_argument("--batch_size", type = int, default = 2 )
-parser.add_argument("--val_batch_size", type = int, default = 2 )
+parser.add_argument("--batch_size", type = int, default = 20 )
+parser.add_argument("--val_batch_size", type = int, default = 10 )
 parser.add_argument("--load_weights", type = str , default = "")
 
 parser.add_argument("--model_name", type = str , default = "")
@@ -40,6 +40,8 @@ epochs = args.epochs
 load_weights = args.load_weights
 
 optimizer_name = args.optimizer_name
+#optimizer_name = optimizers.SGD(lr = 0.001, clipvalue = 0.5, decay = 1e-6, momentum = 0.9, nesterov = True)
+
 model_name = args.model_name
 
 if validate:
@@ -55,7 +57,7 @@ m.compile(loss='categorical_crossentropy',
       optimizer= optimizer_name ,
       metrics=['accuracy'])
 
-callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + model_name + "-th-Aug-{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
+callbacks = [keras.callbacks.TensorBoard(log_dir = save_weights_path), keras.callbacks.ModelCheckpoint(save_weights_path + model_name + "-th-noAugMoreImgs-{epoch:03d}-{val_acc:.3f}.hdf5", verbose = 0, monitor = 'val_acc', mode = 'max', save_best_only = True)]
 
 if len( load_weights ) > 0:
 	m.load_weights(load_weights)
@@ -79,7 +81,7 @@ if not validate:
 		m.save_weights( save_weights_path + "." + str( ep ) )
 		m.save( save_weights_path + ".model." + str( ep ) )
 else:
-	m.fit_generator( G , 512  , validation_data=G_v , validation_steps= 200 ,  epochs= epochs, callbacks = callbacks)
+	m.fit_generator( G , 50  , validation_data=G_v , validation_steps= 10 ,  epochs= epochs, callbacks = callbacks)
         '''
 	for ep in range( epochs ):
 		m.fit_generator( G , 512  , validation_data=G2 , validation_steps=200 ,  epochs=1 )
