@@ -43,7 +43,8 @@ def getSegmentationArr( path , nClasses ,  width , height  ):
 	try:
 		img = cv2.imread(path, 1)
 		img = cv2.resize(img, ( width , height ))
-                img[np.where(img[:,:,0] != 0)] = 1 ## This is becuase in my augmentation the 1 have been converted to 255 and some other numbers!
+                if nClasses == 2:
+                    img[np.where(img[:,:,0] != 0)] = 1 ## This is becuase in my augmentation the 1 have been converted to 255 and some other numbers!
 		img = img[:, : , 0]
 
 		for c in range(nClasses):
